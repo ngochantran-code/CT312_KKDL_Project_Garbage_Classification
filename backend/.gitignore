@@ -1,0 +1,85 @@
+# =========================
+# Node.js
+# =========================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# =========================
+# Environment
+# =========================
+.env
+.env.local
+.env.*
+
+# =========================
+# Logs
+# =========================
+logs/
+*.log
+
+# =========================
+# Build
+# =========================
+dist/
+build/
+
+# =========================
+# Uploads
+# =========================
+backend/uploads/*
+!backend/uploads/.gitkeep
+
+# =========================
+# Python
+# =========================
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+
+# Virtual Environment
+venv/
+.venv/
+env/
+
+# =========================
+# Jupyter
+# =========================
+.ipynb_checkpoints/
+
+# =========================
+# Machine Learning Models
+# =========================
+backend/ml/models/
+backend/ml/dataset/
+backend/uploads/
+node_modules/
+
+# =========================
+# Dataset
+# =========================
+backend/ml/dataset/
+
+# =========================
+# Temporary Files
+# =========================
+*.tmp
+*.temp
+*.cache
+
+# =========================
+# IDE
+# =========================
+.vscode/
+.idea/
+
+# =========================
+# OS Files
+# =========================
+.DS_Store
+Thumbs.db
+desktop.ini
