@@ -90,7 +90,7 @@ const classInfo = {
       "Nên làm sạch và ép dẹp chai nhựa trước khi bỏ vào thùng tái chế.",
   },
   trash: {
-    viName: "Rác khác",
+    viName: "Rác khó tái chế",
     description:
       "Đây là nhóm rác khó tái chế hoặc không thuộc các nhóm phổ biến như giấy, nhựa, kim loại, thủy tinh.",
     suggestion:
