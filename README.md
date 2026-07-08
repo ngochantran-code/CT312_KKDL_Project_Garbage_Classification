@@ -90,7 +90,7 @@ garbage-classification-web/
         ├── App.vue
         ├── style.css
         └── services/
-            └── wasteApi.js
+            └── garbageApi.js
 ```
 
 ## 5. Dataset
