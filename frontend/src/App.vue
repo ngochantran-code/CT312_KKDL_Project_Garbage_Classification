@@ -12,7 +12,7 @@
         </p>
 
         <div class="hero-tags">
-          <span>CNN</span>
+          <span>MobileNetV2</span>
           <span>SVM</span>
           <span>Vue.js</span>
           <span>Node.js</span>
@@ -103,7 +103,7 @@
             </div>
 
             <div class="confidence-box">
-              <strong>{{ result.confidence }}%</strong>
+              <strong>{{ Math.round(result.confidence * 100) }}%</strong>
               <span>tin cậy</span>
             </div>
           </div>

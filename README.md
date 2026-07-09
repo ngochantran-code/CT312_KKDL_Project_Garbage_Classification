@@ -293,7 +293,7 @@ backend/public/related-images/plastic/
 
 Lưu ý: nếu hệ thống dự đoán `cardboard` nhưng folder `cardboard` không có ảnh, phần hình ảnh liên quan sẽ không hiển thị.
 
-## 12. Luồng hoạt động hệ thống
+## 12.1 Luồng hoạt động hệ thống
 
 ```txt
 Người dùng upload ảnh rác thải
@@ -312,7 +312,28 @@ Backend bổ sung mô tả, gợi ý và ảnh liên quan
         ↓
 Frontend hiển thị kết quả cho người dùng
 ```
-
+## 12.2 Luồng hoạt động tổng thể
+```txt
+User upload ảnh
+      │
+      ▼
+[Vue 3 Frontend]  ──POST /api/garbage/predict──>  [Express Server]
+                                                         │
+                                              lưu ảnh vào /uploads
+                                                         │
+                                         spawn python test_svm.py <path>
+                                                         │
+                                              [test_svm.py]
+                                              ├─ Load svm_garbage_model.joblib
+                                              ├─ MobileNetV2 trích xuất đặc trưng
+                                              └─ LinearSVC dự đoán → in JSON
+                                                         │
+                                              trả về { predictedClass, confidence }
+                                                         │
+[Vue 3 Frontend]  <──JSON response───────────  [Express Server]
+     │
+     └─ Hiển thị: tên lớp, mô tả, gợi ý xử lý, ảnh liên quan
+```
 ## 13. Cách chạy toàn bộ hệ thống
 
 ### Bước 1: Train model
