@@ -123,9 +123,13 @@ function getRelatedImages(className, req) {
 
 function runPythonPrediction(imagePath) {
   return new Promise((resolve, reject) => {
-    const scriptPath = path.join(__dirname, "ml", "predict.py");
+    const scriptPath = path.join(__dirname, "ml", "test_svm.py");
 
-    const pythonProcess = spawn(PYTHON_COMMAND, [scriptPath, imagePath]);
+    const cmdParts = PYTHON_COMMAND.split(" ");
+    const cmd = cmdParts[0];
+    const args = [...cmdParts.slice(1), scriptPath, imagePath];
+
+    const pythonProcess = spawn(cmd, args);
 
     let result = "";
     let error = "";

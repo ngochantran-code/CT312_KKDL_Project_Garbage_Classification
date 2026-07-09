@@ -83,3 +83,13 @@ backend/ml/dataset/
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# =========================
+# Large ML feature cache files
+# =========================
+*.npy
+
+# =========================
+# Duplicate nested project folder
+# =========================
+garbage-classification-web/
