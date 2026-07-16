@@ -8,224 +8,162 @@ Original file is located at
 """
 
 import os
-import sys
-import json
 import numpy as np
 import tensorflow as tf
 from tensorflow.keras.preprocessing import image
-import joblib
+import joblib  # Thư viện nạp mô hình SVM
+import matplotlib.pyplot as plt
+from sklearn.metrics import accuracy_score, classification_report, confusion_matrix, ConfusionMatrixDisplay
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
 
-# Suppress TensorFlow logging khi chay qua server
+# Tắt cảnh báo TensorFlow
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
 
+# =====================================================================
+# CHUẨN BỊ MÔI TRƯỜNG & ĐƯỜNG DẪN
+# =====================================================================
 IMG_SIZE = (224, 224)
 BATCH_SIZE = 32
 class_names = ['cardboard', 'glass', 'metal', 'paper', 'plastic', 'trash']
-
-# Duong dan model dung khi chay tren Colab (danh gia toan bo tap validation)
-svm_model_path_colab = '/content/drive/MyDrive/KKDL_2026/Project/svm_garbage_model.joblib'
-
+svm_model_path = r'D:\study\CT312\garbage-classification-web\backend\ml\svm_garbage_model (1).joblib' 
 
 # =====================================================================
-# HAM THU NGHIEM DU DOAN MOT ANH THUC TE BAT KY (Colab / local)
+# KHỞI TẠO BỘ TRÍCH XUẤT ĐẶC TRƯNG MOBILENETV2 VÀ SVM ĐỂ DÙNG CHO API
 # =====================================================================
-def predict_single_image_fixed(img_path, model_svm, base_extractor):
-    import matplotlib.pyplot as plt
+print("\n--- Đang nạp mô hình MobileNetV2 và SVM ---")
+preprocess_input = tf.keras.applications.mobilenet_v2.preprocess_input
+base_model = tf.keras.applications.MobileNetV2(
+    weights='imagenet', include_top=False, input_shape=(224, 224, 3), pooling='avg'
+)
 
-    print(f"\n--- Dang nhan dien anh thuc te: {img_path} ---", file=sys.stderr)
+if os.path.exists(svm_model_path):
+    svm_model = joblib.load(svm_model_path)
+else:
+    print(f"❌ LỖI: Không tìm thấy file model SVM tại '{svm_model_path}'.")
+    svm_model = None
 
-    # 1. Doc anh va dua ve kich thuoc chuan
+# =====================================================================
+# HÀM THỬ NGHIỆM DỰ ĐOÁN MỘT ẢNH THỰC TẾ BẤT KỲ
+# =====================================================================
+def predict_single_image_fixed(img_path, model_svm, base_extractor, show_plot=False):
+    print(f"\n--- Đang nhận diện ảnh thực tế: {img_path} ---")
+
     img = image.load_img(img_path, target_size=(224, 224))
     img_array = image.img_to_array(img)
-
-    # 2. Them dimension batch (1, 224, 224, 3)
     img_array = np.expand_dims(img_array, axis=0)
 
-    # 3. Chuan hoa theo chuan MobileNetV2 (ve khoang -1 den 1)
-    preprocessed_img = tf.keras.applications.mobilenet_v2.preprocess_input(img_array)
-
-    # 4. Trich xuat dac trung bang MobileNetV2
+    preprocessed_img = preprocess_input(img_array)
     features = base_extractor.predict(preprocessed_img, verbose=0)
-
-    # 5. Du doan bang SVM
     pred_class_idx = model_svm.predict(features)[0]
     predicted_label = class_names[pred_class_idx]
 
-    # 6. Hien thi ket qua truc quan
-    plt.figure(figsize=(5, 5))
-    plt.imshow(img)
-    plt.title(f"Ket qua nhan dien: {predicted_label.upper()}", color='green', fontsize=12, fontweight='bold')
-    plt.axis('off')
-    plt.show()
+    if show_plot:
+        plt.figure(figsize=(5, 5))
+        plt.imshow(img)
+        plt.title(f"Kết quả nhận diện: {predicted_label.upper()}", color='green', fontsize=12, fontweight='bold')
+        plt.axis('off')
+        plt.show()
 
-    print(f"He thong phan loai: {predicted_label}", file=sys.stderr)
+    print(f"👉 Hệ thống phân loại: {predicted_label}")
     return predicted_label
 
+# =====================================================================
+# TÍCH HỢP FASTAPI (CHẠY QUA UVICORN)
+# =====================================================================
+app = FastAPI()
+
+class PredictRequest(BaseModel):
+    image_path: str
+
+@app.post("/predict")
+def predict_image(request: PredictRequest):
+    if not svm_model:
+        raise HTTPException(status_code=500, detail="Mô hình SVM chưa được nạp.")
+    
+    img_path = request.image_path
+    if not os.path.exists(img_path):
+        raise HTTPException(status_code=400, detail=f"Không tìm thấy ảnh: {img_path}")
+        
+    try:
+        predicted_label = predict_single_image_fixed(img_path, svm_model, base_model, show_plot=False)
+        return {
+            "success": True,
+            "predictedClass": predicted_label,
+            "confidence": "N/A"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/")
+def read_root():
+    return {"message": "Garbage Classification FastAPI is running directly from test_svm.py"}
+
 
 # =====================================================================
-# CHAY DAY DU TREN COLAB: danh gia toan bo tap validation + ve bieu do
-# Chi chay khi goi truc tiep tren Colab, KHONG chay khi server.js goi
+# CHẠY ĐÁNH GIÁ MÔ HÌNH NẾU CHẠY TRỰC TIẾP FILE NÀY (PYTHON TEST_SVM.PY)
 # =====================================================================
-def run_colab_evaluation():
-    import kagglehub
-    import matplotlib.pyplot as plt
-    from sklearn.metrics import (
-        accuracy_score, classification_report,
-        confusion_matrix, ConfusionMatrixDisplay
-    )
-
-    # 1. Tai tap du lieu kiem thu tu Kaggle
-    print("--- Dang tai du lieu kiem thu tu Kaggle ---")
-    path = kagglehub.dataset_download("asdasdasasdas/garbage-classification")
-    # Neu thu muc bi long, bo comment dong duoi:
-    # path = os.path.join(path, "Garbage classification/Garbage classification")
+if __name__ == '__main__':
+    # 1. TẢI VÀ ĐỊNH NGHĨA TẬP DỮ LIỆU KIỂM THỬ (VAL_DS)
+    print("--- Đang tải dữ liệu kiểm thử---")
+    path = r'D:\study\CT312\garbage-classification-web\backend\ml\dataset'
 
     val_ds = tf.keras.utils.image_dataset_from_directory(
         path,
         validation_split=0.2,
         subset="validation",
-        seed=42,
+        seed=42, 
         image_size=IMG_SIZE,
         batch_size=BATCH_SIZE
     )
+
     AUTOTUNE = tf.data.AUTOTUNE
     val_ds = val_ds.prefetch(buffer_size=AUTOTUNE)
 
-    # 2. Khoi tao bo trich xuat dac trung MobileNetV2
-    print("\n--- Khoi tao bo trich xuat dac trung MobileNetV2 ---")
-    preprocess_input = tf.keras.applications.mobilenet_v2.preprocess_input
-    base_model = tf.keras.applications.MobileNetV2(
-        weights='imagenet', include_top=False, input_shape=(224, 224, 3), pooling='avg'
-    )
-
-    # 3. Trich xuat dac trung tu tap kiem thu
-    print("\n--- Dang trich xuat dac trung tap kiem thu ---")
+    # 3. TRÍCH XUẤT ĐẶC TRƯNG TỪ TẬP KIỂM THỬ
+    print("\n--- Đang trích xuất đặc trưng tập kiểm thử ---")
     X_val_features = []
     y_val_labels = []
+
     for images, labels in val_ds:
         preprocessed_images = preprocess_input(images)
         features = base_model.predict(preprocessed_images, verbose=0)
+
         X_val_features.append(features)
         y_val_labels.append(labels.numpy())
+
     X_val_features = np.concatenate(X_val_features, axis=0)
     y_val_labels = np.concatenate(y_val_labels, axis=0)
 
-    # 4. Nap mo hinh SVM va danh gia
-    if os.path.exists(svm_model_path_colab):
-        print(f"\n--- Dang nap mo hinh SVM tu file: {svm_model_path_colab} ---")
-        svm_model = joblib.load(svm_model_path_colab)
-
+    # 4. ĐÁNH GIÁ ĐỂ LẤY SỐ LIỆU VIẾT BÀI BÁO
+    if svm_model:
         y_pred = svm_model.predict(X_val_features)
-
         acc = accuracy_score(y_val_labels, y_pred)
         print("\n==================================================")
-        print(f"DO CHINH XAC TONG THE (Test Accuracy): {acc * 100:.2f}%")
+        print(f"🔥 ĐỘ CHÍNH XÁC TỔNG THỂ (Test Accuracy): {acc * 100:.2f}%")
         print("==================================================")
 
-        print("\nBAO CAO CHI TIET (Classification Report):")
+        print("\n📊 BÁO CÁO CHI TIẾT (Classification Report):")
         print(classification_report(y_val_labels, y_pred, target_names=class_names))
 
+        print("\n🎨 Đang vẽ Ma trận nhầm lẫn (Confusion Matrix)...")
         cm = confusion_matrix(y_val_labels, y_pred)
         disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=class_names)
+
         fig, ax = plt.subplots(figsize=(8, 8))
         disp.plot(cmap=plt.cm.Blues, ax=ax, values_format='d')
-        plt.title("Ma tran nham lan cua mo hinh MobileNetV2 + SVM", fontsize=12, fontweight='bold')
+        plt.title("Ma trận nhầm lẫn của mô hình MobileNetV2 + SVM", fontsize=12, fontweight='bold')
         plt.xticks(rotation=45)
         plt.tight_layout()
         plt.show()
 
-        # Thu nghiem anh thuc te
-        image_test_name = "/content/drive/MyDrive/KKDL_2026/Project/Image_Test/14.jpg"
+        image_test_name = r"D:\study\CT312\garbage-classification-web\backend\ml\Image_Test\1.jpg"
         if os.path.exists(image_test_name):
-            predict_single_image_fixed(image_test_name, svm_model, base_model)
+            predict_single_image_fixed(image_test_name, svm_model, base_model, show_plot=True)
         else:
-            print(f"Khong tim thay file anh tai duong dan: {image_test_name}")
+            print(f"⚠️ Không tìm thấy file ảnh tại đường dẫn: {image_test_name}")
 
-        print("Cac ma nhan thuc te co trong tap Test:", np.unique(y_val_labels))
-        print("Cac ma nhan mo hinh SVM du doan ra:", np.unique(y_pred))
-        print("Tong so anh mang di test:", len(y_val_labels))
-
-    else:
-        print(f"LOI: Khong tim thay file model SVM tai '{svm_model_path_colab}'.")
-
-
-# =====================================================================
-# ENTRY POINT: Duoc goi boi server.js de du doan mot anh thuc te
-# Nhan duong dan anh qua sys.argv[1], tra ket qua JSON ra stdout
-# =====================================================================
-def main():
-    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-
-    if len(sys.argv) < 2:
-        print(json.dumps({
-            "success": False,
-            "message": "Khong co duong dan anh duoc cung cap."
-        }))
-        sys.exit(1)
-
-    image_path = sys.argv[1]
-
-    # Duong dan toi svm_garbage_model.joblib (nam cung thu muc voi file nay)
-    model_path = os.path.join(BASE_DIR, "svm_garbage_model.joblib")
-
-    if not os.path.exists(model_path):
-        print(json.dumps({
-            "success": False,
-            "message": "Khong tim thay file svm_garbage_model.joblib. Vui long chay train_svm.py de huan luyen."
-        }))
-        sys.exit(1)
-
-    try:
-        # Nap mo hinh SVM (LinearSVC) da luu tu train_svm.py
-        svm_model = joblib.load(model_path)
-
-        # Khoi tao MobileNetV2 lam bo trich xuat dac trung (giong het train_svm.py)
-        preprocess_input = tf.keras.applications.mobilenet_v2.preprocess_input
-        base_model = tf.keras.applications.MobileNetV2(
-            weights='imagenet', include_top=False, input_shape=(224, 224, 3), pooling='avg'
-        )
-
-        # 1. Doc va resize anh ve kich thuoc chuan (224x224)
-        img = image.load_img(image_path, target_size=(224, 224))
-
-        # 2. Chuyen anh thanh array va them dimension batch (1, 224, 224, 3)
-        img_array = image.img_to_array(img)
-        img_array = np.expand_dims(img_array, axis=0)
-
-        # 3. Chuan hoa theo chuan MobileNetV2 (ve khoang -1 den 1)
-        preprocessed_img = preprocess_input(img_array)
-
-        # 4. Trich xuat dac trung bang MobileNetV2
-        features = base_model.predict(preprocessed_img, verbose=0)
-
-        # 5. Du doan bang SVM (LinearSVC)
-        pred_class_idx = svm_model.predict(features)[0]
-        predicted_class = class_names[pred_class_idx]
-
-        # Uoc tinh confidence tu decision_function (LinearSVC khong co predict_proba)
-        confidence = 0.99
-        if hasattr(svm_model, "decision_function"):
-            try:
-                decision = svm_model.decision_function(features)
-                exp_scores = np.exp(decision - np.max(decision))
-                proba = exp_scores / exp_scores.sum()
-                confidence = float(np.max(proba))
-            except Exception:
-                pass
-
-        print(json.dumps({
-            "success": True,
-            "predictedClass": predicted_class,
-            "confidence": confidence
-        }))
-
-    except Exception as e:
-        print(json.dumps({
-            "success": False,
-            "message": str(e)
-        }))
-        sys.exit(1)
-
-
-if __name__ == "__main__":
-    main()
+        print("Các mã nhãn thực tế có trong tập Test:", np.unique(y_val_labels))
+        print("Các mã nhãn mô hình SVM dự đoán ra:", np.unique(y_pred))
+        print("Tổng số ảnh mang đi test:", len(y_val_labels))
