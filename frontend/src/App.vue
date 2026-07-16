@@ -81,7 +81,7 @@
           <h2>Kết quả phân loại</h2>
 
           <p>
-            Sau khi upload ảnh và bấm phân loại, kết quả sẽ hiển thị tại đây.
+            Sau khi upload ảnh và tiến hành phân loại, kết quả sẽ hiển thị tại đây.
           </p>
 
           <div class="class-list">
@@ -100,11 +100,6 @@
               <p class="result-label">Loại rác dự đoán</p>
               <h2>{{ result.viName }}</h2>
               <span class="class-badge">{{ result.predictedClass }}</span>
-            </div>
-
-            <div class="confidence-box">
-              <strong>{{ Math.round(result.confidence * 100) }}%</strong>
-              <span>tin cậy</span>
             </div>
           </div>
 
